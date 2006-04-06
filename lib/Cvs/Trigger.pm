@@ -20,23 +20,6 @@ sub new {
 }
 
 ###########################################
-sub find_bin {
-###########################################
-    my($path, $prog) = @_;
-
-    return undef unless defined $ENV{PATH};
-
-    for my $path (split /:/, $ENV{PATH}) {
-        my $try = File::Spec->catfile($path, $prog);
-        if(-x $try) {
-            return $try;
-        } 
-    }
-
-    return undef;
-}
-
-###########################################
 package Cvs::Temp;
 ###########################################
 use strict;
@@ -51,29 +34,97 @@ sub new {
     my($class, %options) = @_;
 
     my $self = {
-        tmp_dir => tempdir(CLEANUP => 1),
+        cvsroot    => tempdir(CLEANUP => 1),
+        local_root => tempdir(CLEANUP => 1),
         %options,
     };
 
-    $self->{cvs_bin} = bin_find("cvs") unless defined $self->{cvs_bin};
+    $self->{cvs_bin}  = bin_find("cvs") unless defined $self->{cvs_bin};
+    $self->{perl_bin} = bin_find("perl") unless 
+                        defined $self->{perl_bin};
 
     my($stdout, $stderr, $rc) = tap $self->{cvs_bin}, "-d", 
-                                    $self->{tmp_dir}, "init";
+                                    $self->{cvsroot}, "init";
 
     if($rc) {
-        LOGDIE "Cannot create cvs repo in $self->{tmp_dir} ($stderr)";
+        LOGDIE "Cannot create cvs repo in $self->{cvsroot} ($stderr)";
     }
+
+    DEBUG "New cvs created in $self->{cvsroot}";
 
     bless $self, $class;
 }
 
 ###########################################
-sub tmp_dir {
+sub test_trigger_code {
 ###########################################
-    my($self, $newdir) = @_;
+    my($self, $tmpfile, $shebang) = @_;
 
-    $self->{tmp_dir} = $newdir if defined $newdir;
-    return $self->{tmp_dir};
+    $shebang ||= "#!" . $self->{perl_bin};
+
+    my $script = <<'EOT';
+_shebang_
+use Sysadm::Install qw(:all);
+use YAML qw(DumpFile);
+push @ARGV, slurp($ARGV[0]) if $ARGV[0] && -f  $ARGV[0];
+DumpFile("_tmpfile_", \@ARGV);
+EOT
+
+    $script =~ s/_shebang_/$shebang/g;
+    $script =~ s/_tmpfile_/$tmpfile/g;
+
+    return $script;
+}
+
+###########################################
+sub module_import {
+###########################################
+    my($self) = @_;
+
+    my($dir) = tempdir(CLEANUP => 1); 
+
+    DEBUG "Temporary workspace dir $dir";
+
+    cd $dir;
+    mkd "foo/bar";
+    blurt "footext", "foo/foo.txt";
+    blurt "bartext", "foo/bar/bar.txt";
+    $self->cvs_cmd("import", "-m", "msg", "foo", "tag1", "tag2");
+    cdback;
+
+    cd $self->{local_root};
+    $self->cvs_cmd("co", "foo");
+    cdback;
+}
+
+###########################################
+sub file_check_in {
+###########################################
+    my($self) = @_;
+
+    my $dir = $self->{local_root};
+
+    cd "$dir/foo/foo";
+
+    blurt rand(1E10), "foo.txt";
+    $self->cvs_cmd("commit", "-m", "msg", "foo.txt");
+
+    cdback;
+}
+
+###########################################
+sub cvs_cmd {
+###########################################
+    my($self, @cmd) = @_;
+
+    unshift @cmd, $self->{cvs_bin}, "-d", $self->{cvsroot};
+    DEBUG "Running CVS command @cmd";
+
+    my($stdout, $stderr, $rc) = tap @cmd;
+
+    if($rc) {
+        LOGDIE "@cmd failed: $stderr";
+    }
 }
 
 1;
