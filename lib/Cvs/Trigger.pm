@@ -66,8 +66,12 @@ sub test_trigger_code {
 _shebang_
 use Sysadm::Install qw(:all);
 use YAML qw(DumpFile);
+use Data::Dumper;
+my $in = join '', <STDIN>;
+unshift @ARGV, $in;
 push @ARGV, slurp($ARGV[0]) if $ARGV[0] && -f  $ARGV[0];
-DumpFile("_tmpfile_", \@ARGV);
+blurt(Dumper(\@ARGV), "_tmpfile_", 1);
+die "Whoa************************************************************************************Whoaa!";
 EOT
 
     $script =~ s/_shebang_/$shebang/g;
@@ -104,10 +108,12 @@ sub file_check_in {
 
     my $dir = $self->{local_root};
 
-    cd "$dir/foo/foo";
+    cd "$dir/foo";
 
-    blurt rand(1E10), "foo.txt";
-    $self->cvs_cmd("commit", "-m", "msg", "foo.txt");
+    blurt rand(1E10), "foo/foo.txt";
+    blurt rand(1E10), "foo/bar/bar.txt";
+
+    $self->cvs_cmd("commit", "-m", "foo-check-in-message");
 
     cdback;
 }
@@ -125,6 +131,8 @@ sub cvs_cmd {
     if($rc) {
         LOGDIE "@cmd failed: $stderr";
     }
+
+    DEBUG "@cmd succeeded: $stdout";
 }
 
 1;
