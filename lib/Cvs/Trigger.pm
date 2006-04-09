@@ -20,8 +20,6 @@ use Cache::FileCache;
 use Storable qw(freeze thaw);
 use POSIX;
 
-Log::Log4perl->easy_init($DEBUG);
-
 our $VERSION = "0.01";
 
 ###########################################
@@ -166,6 +164,7 @@ sub verifymsg {
     }
 
     DEBUG "verifymsg parameters: ", Dumper($res);
+    return $res;
 }
 
 #2006/04/08 13:29:22 argv=verifymsg /tmp/cvsDYgcCY
@@ -282,7 +281,7 @@ _shebang_
 use Cvs::Trigger qw(:all);
 use YAML qw(DumpFile);
 use Log::Log4perl qw(:easy);
-Log::Log4perl->easy_init({ level => $DEBUG, file => ">>_logfile_"});
+Log::Log4perl->easy_init({ level => $DEBUG, file => ">>_tmpfile_"});
 DEBUG "trigger starting @ARGV";
 my $c = Cvs::Trigger->new(_cache_);
 my $ret = $c->parse("_type_");
@@ -344,7 +343,7 @@ sub files_commit {
     for my $file (@files) {
         blurt rand(1E10), $file;
     }
-    $self->cvs_cmd("commit", "-m", "@files-check-in-message");
+    $self->cvs_cmd("commit", "-m", "@files-check-in-message", @files);
 
     cdback;
 }
@@ -394,4 +393,4 @@ modify it under the same terms as Perl itself.
 
 =head1 AUTHOR
 
-2005, Mike Schilli <mschilli@yahoo-inc.com>
+2005, Mike Schilli <m@perlmeister.com>
