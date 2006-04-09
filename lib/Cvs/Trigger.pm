@@ -9,6 +9,7 @@ package Cvs::Trigger;
 # * files in several dirs
 # * parse ''message' => 'a/b txt3,1.4,1.5'
 # * test suite
+# * blib dir include for test suite
 
 use strict;
 use warnings;
@@ -274,7 +275,7 @@ sub new {
 ###########################################
 sub test_trigger_code {
 ###########################################
-    my($self, $type) = @_;
+    my($self, $type, $cache) = @_;
 
     my $script = <<'EOT';
 _shebang_
@@ -283,9 +284,13 @@ use YAML qw(DumpFile);
 use Log::Log4perl qw(:easy);
 Log::Log4perl->easy_init({ level => $DEBUG, file => ">>_logfile_"});
 DEBUG "trigger starting @ARGV";
-my $c = Cvs::Trigger->new();
+my $c = Cvs::Trigger->new(_cache_);
 my $ret = $c->parse("_type_");
-DumpFile "_tmpfile_", $ret;
+my $count = 1;
+while(-f "_tmpfile_.$count") {
+    $count++;
+}
+DumpFile "_tmpfile_.$count", $ret;
 EOT
 
     my $shebang = "#!" . $self->{perl_bin};
@@ -294,6 +299,11 @@ EOT
     $script =~ s#_tmpfile_#$self->{out_dir}/trigger.yml#g;
     $script =~ s#_logfile_#$self->{out_dir}/log#g;
     $script =~ s/_type_/$type/g;
+    if($cache) {
+        $script =~ s/_cache_/cache => 1/g;
+    } else {
+        $script =~ s/_cache_//g;
+    }
 
     return $script;
 }
