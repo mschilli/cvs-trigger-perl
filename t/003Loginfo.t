@@ -14,7 +14,7 @@ use YAML qw(LoadFile);
 
 BEGIN { use_ok('Cvs::Trigger') };
 
-Log::Log4perl->easy_init($DEBUG);
+#Log::Log4perl->easy_init($DEBUG);
 
 my $c = Cvs::Temp->new();
 $c->module_import();

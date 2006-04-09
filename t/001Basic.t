@@ -34,6 +34,7 @@ my $yml = LoadFile("$c->{out_dir}/trigger.yml.1");
 is($yml->{files}->[0], "a1.txt", "yml trigger check for single file");
 is($yml->{repo_dir}, "$c->{cvsroot}/m/a", "yml trigger check repo_dir");
 
+__END__
     # More files in same dir
 $c->files_commit("m/a/a1.txt", "m/a/a2.txt");
 $yml = LoadFile("$c->{out_dir}/trigger.yml.2");
