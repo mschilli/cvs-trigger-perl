@@ -189,11 +189,51 @@ sub loginfo {
 
     my $res = {
         opts    => \@opts,
-        message => $data,
     };
 
-    DEBUG "loginfo parameters: ", Dumper($res);
+    $self->loginfo_message_parse($data, $res);
+
+    DEBUG "loginfo returns ", Dumper($res);
+
+    return $res;
 }
+
+###########################################
+sub loginfo_message_parse {
+###########################################
+    my($self, $data, $res) = @_;
+
+    DEBUG "Parsing $data";
+
+    if($data =~
+         m#Update\sof\s(.*)\n
+           In\sdirectory\s(.*?):(.*)\n\n
+          #x) {
+        $res->{repo_dir}  = $1;
+        $res->{host}      = $2;
+        $res->{local_dir} = $3;
+    }
+
+    if($data =~ m#Modified\sFiles:\n#gx) {
+        while($data =~ /\s+(\S+)/mg) {
+            push @{ $res->{files} }, $1;
+        }
+    }
+
+    if($data =~ m#Log\sMessage:\n(.*)#sgx) {
+        $res->{message} = $1;
+    }
+
+    return $res;
+}
+
+#Update of /tmp/vHmsem4xFV/cvsroot/m/a
+#In directory mybox:/tmp/vHmsem4xFV/local_root/m/a
+#
+#Modified Files:
+#       a1.txt
+#Log Message:
+#m/a/a1.txt-check-in-message
 
 #2006/04/08 13:29:22 argv=loginfo
 #2006/04/08 13:29:22 pid=20656 ppid=20653
@@ -281,7 +321,7 @@ _shebang_
 use Cvs::Trigger qw(:all);
 use YAML qw(DumpFile);
 use Log::Log4perl qw(:easy);
-Log::Log4perl->easy_init({ level => $DEBUG, file => ">>_tmpfile_"});
+Log::Log4perl->easy_init({ level => $DEBUG, file => ">>_logfile_"});
 DEBUG "trigger starting @ARGV";
 my $c = Cvs::Trigger->new(_cache_);
 my $ret = $c->parse("_type_");
