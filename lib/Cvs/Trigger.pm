@@ -109,6 +109,7 @@ sub _cache_set {
 
         push @{ $cdata->{$repo_dir} }, $file;
     }
+    DEBUG "Setting $ppid cache to ", Dumper($cdata);
     $self->{file_cache}->set($ppid, freeze $cdata);
 }
 
@@ -157,6 +158,7 @@ sub verifymsg {
 
     if($self->{cache}) {
         $res->{cache} = $self->_cache_get();
+        $self->{file_cache}->remove(getppid());
     }
 
     DEBUG "verifymsg parameters: ", Dumper($res);
