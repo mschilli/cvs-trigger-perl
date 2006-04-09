@@ -2,14 +2,6 @@
 package Cvs::Trigger;
 ###########################################
 
-# TODO
-# * no STDIN on loginfo => hangs
-# * configure cache timeout/namespace
-# * more than 1 file per dir
-# * files in several dirs
-# * parse ''message' => 'a/b txt3,1.4,1.5'
-# * methods vs. hash access
-
 use strict;
 use warnings;
 use File::Spec;
@@ -654,6 +646,13 @@ message available:
         }
     } 
 
+=head1 TODO List
+
+    * parse ''message' => 'a/b txt3,1.4,1.5'
+    * methods vs. hash access
+    * no STDIN on loginfo => hangs
+    * configure cache timeout/namespace
+
 =head1 LEGALESE
 
 Copyright 2006 by Mike Schilli, all rights reserved.
@@ -662,4 +661,4 @@ modify it under the same terms as Perl itself.
 
 =head1 AUTHOR
 
-2005, Mike Schilli <m@perlmeister.com>
+2006, Mike Schilli <m@perlmeister.com>
