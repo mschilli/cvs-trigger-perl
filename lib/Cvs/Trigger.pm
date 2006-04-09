@@ -10,6 +10,7 @@ package Cvs::Trigger;
 # * parse ''message' => 'a/b txt3,1.4,1.5'
 # * test suite
 # * blib dir include for test suite
+# * methods vs. hash access
 
 use strict;
 use warnings;
@@ -277,6 +278,7 @@ use warnings;
 use File::Temp qw(tempdir);
 use Sysadm::Install qw(:all);
 use Log::Log4perl qw(:easy);
+use Cwd;
 
 ###########################################
 sub new {
@@ -318,6 +320,8 @@ sub test_trigger_code {
 
     my $script = <<'EOT';
 _shebang_
+use lib '_cwd_/blib/lib';
+use lib '_cwd_/blib/arch';
 use Cvs::Trigger qw(:all);
 use YAML qw(DumpFile);
 use Log::Log4perl qw(:easy);
@@ -336,6 +340,7 @@ EOT
     $script =~ s/_shebang_/$shebang/g;
 
     $script =~ s#_tmpfile_#$self->{out_dir}/trigger.yml#g;
+    $script =~ s#_cwd_#cwd()#ge;
     $script =~ s#_logfile_#$self->{out_dir}/log#g;
     $script =~ s/_type_/$type/g;
     if($cache) {
