@@ -40,16 +40,14 @@ sub new {
 ###########################################
 sub parse {
 ###########################################
-    my($self, $type, $n_opt_args) = @_;
-
-    $n_opt_args = 0 unless defined $n_opt_args;
+    my($self, $type, $opts) = @_;
 
     $type = $self->{type} unless defined $type;
     LOGDIE "No type defined" unless defined $type;
 
     if(exists $self->{routines}->{$type}) {
         DEBUG "Running $type (pid=$$ ppid=", getppid(), ")";
-        $self->{routines}->{$type}->($self, $n_opt_args);
+        $self->{routines}->{$type}->($self, $opts);
     } else {
         LOGDIE "Unknown type: $type";
     }
@@ -58,8 +56,10 @@ sub parse {
 ###########################################
 sub commitinfo {
 ###########################################
-    my($self, $n_opt_args) = @_;
+    my($self, $opts) = @_;
 
+    $opts ||= {};
+    my $n_opt_args = ($opts->{n_opt_args} || 0);
     my $trigger = "commitinfo";
     my @nargv   = @ARGV[$n_opt_args .. $#ARGV];
 
@@ -86,44 +86,6 @@ sub commitinfo {
     DEBUG "$trigger return parameters: ", Dumper($res);
 
     return $res;
-}
-
-###########################################
-sub _cache_set {
-###########################################
-    my($self, $repo_dir, @files) = @_;
-
-    my $ppid = getppid();
-
-    my $cdata = $self->_cache_get();
-
-    for my $file (@files) {
-        DEBUG "Caching $repo_dir/$file under ppid=$ppid";
-
-        push @{ $cdata->{$repo_dir} }, $file;
-    }
-    DEBUG "Setting $ppid cache to ", Dumper($cdata);
-    $self->{file_cache}->set($ppid, freeze $cdata);
-}
-
-###########################################
-sub _cache_get {
-###########################################
-    my($self) = @_;
-
-    my $ppid = getppid();
-
-    my $cdata;
-
-    if(my $c = $self->{file_cache}->get($ppid)) {
-        DEBUG "Cache hit on ppid=$ppid";
-        $cdata = thaw $c;
-    } else {
-        DEBUG "Cache miss on ppid=$ppid";
-        $cdata = {};
-    }
-
-    return $cdata;
 }
 
 ###########################################
@@ -170,7 +132,10 @@ sub verifymsg {
 ###########################################
 sub loginfo {
 ###########################################
-    my($self) = @_;
+    my($self, $opts) = @_;
+
+    $opts ||= {};
+    my $rev_fmt = ($opts->{rev_fmt} || undef);
 
     DEBUG "Running loginfo ($$ ", getppid(), ")";
 
@@ -182,7 +147,7 @@ sub loginfo {
         opts    => \@opts,
     };
 
-    $self->loginfo_message_parse($data, $res);
+    $self->loginfo_message_parse($data, $res, $rev_fmt);
 
     DEBUG "loginfo returns ", Dumper($res);
 
@@ -192,9 +157,27 @@ sub loginfo {
 ###########################################
 sub loginfo_message_parse {
 ###########################################
-    my($self, $data, $res) = @_;
+    my($self, $data, $res, $rev_fmt) = @_;
 
     DEBUG "Parsing $data";
+
+    if(defined $rev_fmt) {
+        if($rev_fmt ne "sVv") {
+            LOGDIE "For now, only 'sVv' is supported ",
+                   "as a revision info format (got '$rev_fmt')";
+        }
+            # Extract/remove first line
+        my($line) = ($data =~ /(.*)/);
+        $data =~ s/(.*)\n//;
+
+        DEBUG "Extracted revision line $line";
+
+        my($path, @fields) = split ' ', $line;
+        for(@fields) {
+            my($file, $rev1, $rev2) = split /,/, $_;
+            $res->{revs}->{$file} = [$rev1, $rev2];
+        }
+    }
 
     if($data =~
          m#Update\sof\s(.*)\n
@@ -206,8 +189,9 @@ sub loginfo_message_parse {
     }
 
     if($data =~ m#Modified\sFiles:\n#gx) {
-        while($data =~ /\s+(\S+)/mg) {
-            push @{ $res->{files} }, $1;
+        while($data =~ /^\s+(.*)/mg) {
+            my @files = split ' ', $1;
+            push @{ $res->{files} }, @files;
         }
     }
 
@@ -261,6 +245,44 @@ sub _slurp {
 #
 
 ###########################################
+sub _cache_set {
+###########################################
+    my($self, $repo_dir, @files) = @_;
+
+    my $ppid = getppid();
+
+    my $cdata = $self->_cache_get();
+
+    for my $file (@files) {
+        DEBUG "Caching $repo_dir/$file under ppid=$ppid";
+
+        push @{ $cdata->{$repo_dir} }, $file;
+    }
+    DEBUG "Setting $ppid cache to ", Dumper($cdata);
+    $self->{file_cache}->set($ppid, freeze $cdata);
+}
+
+###########################################
+sub _cache_get {
+###########################################
+    my($self) = @_;
+
+    my $ppid = getppid();
+
+    my $cdata;
+
+    if(my $c = $self->{file_cache}->get($ppid)) {
+        DEBUG "Cache hit on ppid=$ppid";
+        $cdata = thaw $c;
+    } else {
+        DEBUG "Cache miss on ppid=$ppid";
+        $cdata = {};
+    }
+
+    return $cdata;
+}
+
+###########################################
 package Cvs::Temp;
 ###########################################
 use strict;
@@ -306,7 +328,7 @@ sub new {
 ###########################################
 sub test_trigger_code {
 ###########################################
-    my($self, $type, $cache) = @_;
+    my($self, $type, $cache, $parse_opt) = @_;
 
     my $script = <<'EOT';
 _shebang_
@@ -318,7 +340,7 @@ use Log::Log4perl qw(:easy);
 Log::Log4perl->easy_init({ level => $DEBUG, file => ">>_logfile_"});
 DEBUG "trigger starting @ARGV";
 my $c = Cvs::Trigger->new(_cache_);
-my $ret = $c->parse("_type_");
+my $ret = $c->parse("_type_", _parse_opt_);
 my $count = 1;
 while(-f "_tmpfile_.$count") {
     $count++;
@@ -338,6 +360,14 @@ EOT
     } else {
         $script =~ s/_cache_//g;
     }
+
+    if($parse_opt) {
+        $script =~ s/_parse_opt_/$parse_opt/g;
+    } else {
+        $script =~ s/_parse_opt_/undef/g;
+    }
+
+    DEBUG "Test trigger code: $script";
 
     return $script;
 }
@@ -485,7 +515,7 @@ the number of these parameters needs to be passed to the C<parse> method:
     # /path/cvstrig
     use Cvs::Trigger;
     my $c = Cvs::Trigger->new();
-    my $args = $c->parse("commitinfo", 2);
+    my $args = $c->parse("commitinfo", { n_opt_args => 2 });
 
         # => "foo-bar"
     print join('-', @{ $args->{opts} }), "\n";
@@ -526,17 +556,11 @@ Gets executed after the check-in succeeded. It doesn't matter if the
 corresponding script fails or not, the check-in has already happend
 by the time it gets called.
 
-Note that the syntax to call the script from the C<loginfo> administration
-file is different from the previous hooks:
+An entry like
 
-   DEFAULT ((echo %{sVv}; cat) | /path/cvstrig)
+   DEFAULT /path/string
 
-The first line piped into the script's STDIN consists of the file name,
-the previous and the new revision number, all space-separated (oh well, this
-seems to have been invented before spaces in file names came around).
-
-Following this line, a message gets passed to the script, looking something
-like this:
+will call the loginfo script with the following data on STDIN:
 
     Update of /cvsroot/m/a
     In directory mybox:/local_root/m/a
@@ -576,7 +600,41 @@ directory.
 
 =back
 
-=back
+C<loginfo> scripts can get additional data from C<cvs>. For this to
+happen, the call syntax in the C<loginfo> administration
+file needs to change to this format:
+
+   DEFAULT ((echo %{sVv}; cat) | /path/script)
+
+The first line piped into the script's STDIN then consists of the file name,
+the previous and the new revision number, all space-separated (oh well, this
+seems to have been invented before spaces in file names came around):
+
+    module/path file1.txt,1.3,1.4 file2,1.1,1.2
+    Update of /tmp/RgNSQ4Yomr/cvsroot/module/path
+    In directory mybox:/tmp/RgNSQ4Yomr/local_root/module/path
+
+    Modified Files:
+        file1.txt file2.txt
+    Log Message:
+        Here are my check-in notes.
+
+In order to parse this enhanced format, the call to 
+C<Cvs::Trigger>'s C<parse> method needs to be modified:
+
+    use Cvs::Trigger;
+    my $c = Cvs::Trigger->new();
+    my $args = $c->parse("verifymsg", { rev_fmt => "sVv" });
+
+The result in args will then store the file names and their revisions
+under the C<revs> key:
+
+    use Data::Dumper;
+    print Dumper($args->{revs});
+
+        # $VAR1 = { file1.txt => [1.3, 1.4]
+                    file2.txt => [1.1, 1.2]
+                  }
 
 =head2 Use the same script for multiple hooks
 
@@ -611,7 +669,7 @@ argument parser accordingly:
         }
     }
 
-=head2 Loop fields through by caching
+=head2 Remember fields by caching
 
 If you want to make a decision based on both the file name and the 
 check-in message, none of the hooks provides all necessary information
