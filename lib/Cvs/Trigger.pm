@@ -1,11 +1,21 @@
 ###########################################
 package Cvs::Trigger;
 ###########################################
+
+# TODO
+# * no STDIN on loginfo => hangs
+# * configure cache timeout/namespace
+# * more than 1 file per dir
+# * files in several dirs
+
 use strict;
 use warnings;
 use File::Spec;
 use Log::Log4perl qw(:easy);
 use Data::Dumper;
+use Cache::FileCache;
+use Storable qw(freeze thaw);
+use POSIX;
 
 Log::Log4perl->easy_init($DEBUG);
 
@@ -24,19 +34,30 @@ sub new {
         %options,
     };
 
+    if($self->{cache}) {
+        $self->{file_cache} = Cache::FileCache->new({
+                namespace           => "cvs",
+                default_expires_in  => 3600,
+                auto_purge_interval => 1800,
+        });
+    }
+
     bless $self, $class;
 }
 
 ###########################################
 sub parse {
 ###########################################
-    my($self, $type) = @_;
+    my($self, $type, $n_opt_args) = @_;
+
+    $n_opt_args = 1 unless defined $n_opt_args;
 
     $type = $self->{type} unless defined $type;
     LOGDIE "No type defined" unless defined $type;
 
     if(exists $self->{routines}->{$type}) {
-        $self->{routines}->{$type}->($self);
+        DEBUG "Running $type (pid=$$ ppid=", getppid(), ")";
+        $self->{routines}->{$type}->($self, $n_opt_args);
     } else {
         LOGDIE "Unknown type: $type";
     }
@@ -45,28 +66,70 @@ sub parse {
 ###########################################
 sub commitinfo {
 ###########################################
-    my($self) = @_;
+    my($self, $n_opt_args) = @_;
 
-    if(@ARGV < 2) {
-        LOGDIE "Argument error: commitinfo expects at least 2 parameters";
+    my $trigger = "commitinfo";
+    my @nargv   = @ARGV[$n_opt_args .. $#ARGV];
+
+    if(@nargv < 2) {
+        LOGDIE "Argument error: $trigger expects at least 2 parameters";
     }
 
-    my($repo_dir, $file) = @ARGV[-2, -1];
-
-    my @opts = ();
-    @opts = @ARGV[2 .. $#ARGV-2] if @ARGV > 2;
+    my($repo_dir, @files) = @nargv;
+    my @opts              = @ARGV[1 .. $n_opt_args-2];
 
     my $res = {
         repo_dir => $repo_dir,
-        file     => $file,
+        files    => \@files,
         opts     => \@opts,
-        trigger  => "commitinfo",
-        argv     => \@ARGV,
+        trigger  => $trigger,
+        argv     => \@nargv,
     };
 
-    DEBUG "commitinfo parameters: ", Dumper($res);
+    if($self->{file_cache}) {
+        $self->_cache_set($repo_dir, @files);
+    }
+
+    DEBUG "$trigger return parameters: ", Dumper($res);
 
     return $res;
+}
+
+###########################################
+sub _cache_set {
+###########################################
+    my($self, $repo_dir, @files) = @_;
+
+    my $ppid = getppid();
+
+    my $cdata = $self->_cache_get();
+
+    for my $file (@files) {
+        DEBUG "Caching $repo_dir/$file under ppid=$ppid";
+
+        push @{ $cdata->{$repo_dir} }, $file;
+    }
+    $self->{file_cache}->set($ppid, freeze $cdata);
+}
+
+###########################################
+sub _cache_get {
+###########################################
+    my($self) = @_;
+
+    my $ppid = getppid();
+
+    my $cdata;
+
+    if(my $c = $self->{file_cache}->get($ppid)) {
+        DEBUG "Cache hit on ppid=$ppid";
+        $cdata = thaw $c;
+    } else {
+        DEBUG "Cache miss on ppid=$ppid";
+        $cdata = {};
+    }
+
+    return $cdata;
 }
 
 ###########################################
@@ -74,18 +137,27 @@ sub verifymsg {
 ###########################################
     my($self) = @_;
 
+    DEBUG "Running verifymsg ($$ ", getppid(), ")";
+
     if(@ARGV < 1) {
-        LOGDIE "Argument error: commitinfo expects at least 2 parameters";
+        LOGDIE "Argument error: commitinfo expects at least 1 parameter";
     }
 
-    my($tmp_file) = @ARGV;
+    my $tmp_file = $ARGV[-1];
 
     my $data = _slurp($tmp_file);
 
+    my @opts = ();
+    @opts = @ARGV[1 .. $#ARGV-1] if @ARGV > 1;
+
     my $res = {
-        opts    => \@ARGV[1,],
+        opts    => \@opts,
         message => $data,
     };
+
+    if($self->{cache}) {
+        $res->{cache} = $self->_cache_get();
+    }
 
     DEBUG "verifymsg parameters: ", Dumper($res);
 }
@@ -104,13 +176,18 @@ sub loginfo {
 ###########################################
     my($self) = @_;
 
-    my $data = <STDIN>;
+    DEBUG "Running loginfo ($$ ", getppid(), ")";
+
+    my @opts = @ARGV;
+
+    my $data = join '', <STDIN>;
 
     my $res = {
-        opts    => \@ARGV,
+        opts    => \@opts,
         message => $data,
     };
 
+    DEBUG "loginfo parameters: ", Dumper($res);
 }
 
 #2006/04/08 13:29:22 argv=loginfo
