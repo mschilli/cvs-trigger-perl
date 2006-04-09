@@ -7,6 +7,8 @@ package Cvs::Trigger;
 # * configure cache timeout/namespace
 # * more than 1 file per dir
 # * files in several dirs
+# * parse ''message' => 'a/b txt3,1.4,1.5'
+# * test suite
 
 use strict;
 use warnings;
@@ -50,7 +52,7 @@ sub parse {
 ###########################################
     my($self, $type, $n_opt_args) = @_;
 
-    $n_opt_args = 1 unless defined $n_opt_args;
+    $n_opt_args = 0 unless defined $n_opt_args;
 
     $type = $self->{type} unless defined $type;
     LOGDIE "No type defined" unless defined $type;
@@ -72,7 +74,8 @@ sub commitinfo {
     my @nargv   = @ARGV[$n_opt_args .. $#ARGV];
 
     if(@nargv < 2) {
-        LOGDIE "Argument error: $trigger expects at least 2 parameters";
+        LOGDIE "Argument error: $trigger expects at least 2 parameters ",
+               "(got @nargv)";
     }
 
     my($repo_dir, @files) = @nargv;
@@ -241,47 +244,56 @@ sub new {
     my($class, %options) = @_;
 
     my $self = {
-        cvsroot    => tempdir(CLEANUP => 1),
-        local_root => tempdir(CLEANUP => 1),
+        dir => tempdir(CLEANUP => 1),
         %options,
     };
+
+    $self->{cvsroot}     = "$self->{dir}/cvsroot";
+    $self->{local_root}  = "$self->{dir}/local_root";
+    $self->{out_dir}     = "$self->{dir}/out_dir";
+    $self->{bin_dir}     = "$self->{dir}/bin";
+
+    mkd $self->{local_root};
+    mkd $self->{out_dir};
+    mkd $self->{bin_dir};
+
+    DEBUG "tempdir = $self->{dir}";
 
     $self->{cvs_bin}  = bin_find("cvs") unless defined $self->{cvs_bin};
     $self->{perl_bin} = bin_find("perl") unless 
                         defined $self->{perl_bin};
 
-    my($stdout, $stderr, $rc) = tap $self->{cvs_bin}, "-d", 
-                                    $self->{cvsroot}, "init";
+    bless $self, $class;
 
-    if($rc) {
-        LOGDIE "Cannot create cvs repo in $self->{cvsroot} ($stderr)";
-    }
-
+    $self->cvs_cmd("init");
     DEBUG "New cvs created in $self->{cvsroot}";
 
-    bless $self, $class;
+    return $self;
 }
 
 ###########################################
 sub test_trigger_code {
 ###########################################
-    my($self, $tmpfile, $shebang) = @_;
-
-    $shebang ||= "#!" . $self->{perl_bin};
+    my($self, $type) = @_;
 
     my $script = <<'EOT';
 _shebang_
-use Sysadm::Install qw(:all);
+use Cvs::Trigger qw(:all);
 use YAML qw(DumpFile);
-use Data::Dumper;
-my $in = "no-in"; #join '', <STDIN>;
-unshift @ARGV, $in;
-push @ARGV, slurp($ARGV[0]) if $ARGV[0] && -f  $ARGV[0];
-blurt(Dumper(\@ARGV), "_tmpfile_", 1);
+use Log::Log4perl qw(:easy);
+Log::Log4perl->easy_init({ level => $DEBUG, file => ">>_logfile_"});
+DEBUG "trigger starting @ARGV";
+my $c = Cvs::Trigger->new();
+my $ret = $c->parse("_type_");
+DumpFile "_tmpfile_", $ret;
 EOT
 
+    my $shebang = "#!" . $self->{perl_bin};
     $script =~ s/_shebang_/$shebang/g;
-    $script =~ s/_tmpfile_/$tmpfile/g;
+
+    $script =~ s#_tmpfile_#$self->{out_dir}/trigger.yml#g;
+    $script =~ s#_logfile_#$self->{out_dir}/log#g;
+    $script =~ s/_type_/$type/g;
 
     return $script;
 }
@@ -291,35 +303,38 @@ sub module_import {
 ###########################################
     my($self) = @_;
 
-    my($dir) = tempdir(CLEANUP => 1); 
+    DEBUG "Importing module";
 
-    DEBUG "Temporary workspace dir $dir";
+    cd $self->{local_root};
 
-    cd $dir;
-    mkd "foo/bar";
-    blurt "footext", "foo/foo.txt";
-    blurt "bartext", "foo/bar/bar.txt";
-    $self->cvs_cmd("import", "-m", "msg", "foo", "tag1", "tag2");
+    mkd "m/a/b";
+    blurt "a1text", "m/a/a1.txt";
+    blurt "a2text", "m/a/a2.txt";
+    blurt "btext",  "m/a/b/b.txt";
+
+    cd "m";
+    $self->cvs_cmd("import", "-m", "msg", "m", "tag1", "tag2");
     cdback;
 
     cd $self->{local_root};
-    $self->cvs_cmd("co", "foo");
+    rmf "m";
+    cdback;
+
+    $self->cvs_cmd("co", "m");
     cdback;
 }
 
 ###########################################
-sub file_check_in {
+sub files_commit {
 ###########################################
-    my($self) = @_;
+    my($self, @files) = @_;
 
     my $dir = $self->{local_root};
 
-    cd "$dir/foo";
-
-    blurt rand(1E10), "foo/foo.txt";
-    blurt rand(1E10), "foo/bar/bar.txt";
-
-    $self->cvs_cmd("commit", "-m", "foo-check-in-message");
+    for my $file (@files) {
+        blurt rand(1E10), $file;
+    }
+    $self->cvs_cmd("commit", "-m", "@files-check-in-message");
 
     cdback;
 }
