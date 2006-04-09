@@ -8,8 +8,6 @@ package Cvs::Trigger;
 # * more than 1 file per dir
 # * files in several dirs
 # * parse ''message' => 'a/b txt3,1.4,1.5'
-# * test suite
-# * blib dir include for test suite
 # * methods vs. hash access
 
 use strict;
@@ -416,23 +414,249 @@ __END__
 
 =head1 NAME
 
-Cvs::Trigger - blah blah blah
+Cvs::Trigger - Argument parsers for CVS triggers
 
 =head1 SYNOPSIS
 
+    # CVSROOT/commitinfo
+    DEFAULT /path/trigger
+
+    # /path/trigger
     use Cvs::Trigger;
+    my $c = Cvs::Trigger->new();
+    my $args = $c->parse("commitinfo");
+
+    if( $args->{repo_dir} =~ m#/secret$#) {
+        die "You can't check stuff into the secret project";
+    }
+
+    for my $file (@{ $args->{files} }) {
+        if( $file =~ /\.doc$/ ) {
+            die "Sorry, we don't allow .doc files in CVS";
+        }
+    }
 
 =head1 DESCRIPTION
 
-Cvs::Trigger blah blah blah.
+CVS provides three different hooks to intercept check-ins. They can be used
+to approve/reject check-ins or to take action, like logging the check-in
+in a database.
 
-=head1 EXAMPLES
+=over 4
 
-  $ perl -MCvs::Trigger -le 'print $foo'
+=item C<commitinfo>
+
+Gets executed before the check-in happens. If it returns a false value
+(usually caused by calling C<die()>), the check-in gets rejected.
+
+The following entry in the CVS admin file C<commitinfo> calls the hook
+for all check-ins:
+
+    # CVSROOT/commitinfo
+    ALL /path/cvstrig
+
+The corresponding script, C</path/cvstrig>, parses the arguments which 
+C<cvs> passes to them:
+
+    # /path/cvstrig
+    use Cvs::Trigger;
+    my $c = Cvs::Trigger->new();
+    my $args = $c->parse("commitinfo");
+
+Note that you need to specify the hook name to the C<parse> method, because
+CVS provides the different hooks with different parameters. In case of
+the C<commitinfo> hook, the following parameters are available as keys
+into the has referenced by C<$args>:
+
+=over 4
+
+=item C<repo_dir>
+
+Full path to the repository directory where the check-in happens, e.g.
+C</cvsroot/foo/bardir>.
+
+=item C<files>
+
+Reference to an array of filenames involved the check-in. No path
+information is provided, all files are relative to the C<repo_dir>
+directory.
+
+=item C<opts>
+
+Additionally, optional parameters passed to the trigger script are available
+with this parameter. Note that 
+the number of these parameters needs to be passed to the C<parse> method:
+
+    # CVSROOT/commitinfo
+    ALL /path/cvstrig foo bar
+
+    # /path/cvstrig
+    use Cvs::Trigger;
+    my $c = Cvs::Trigger->new();
+    my $args = $c->parse("commitinfo", 2);
+
+        # => "foo-bar"
+    print join('-', @{ $args->{opts} }), "\n";
+
+=back
+
+=item C<verifymsg>
+
+Gets executed right after the user entered the check-in message. Based on
+the message text, the check-in can be approved or rejected.
+
+This hook is typically used to enforce a certain format or content of the
+log message provided by the user.
+
+Here's an example that checks if the check-in message references a bug number:
+
+    # CVSROOT/verifymsg
+    DEFAULT /path/checkin-verifier
+
+    # /path/checkin-verifier
+    #!/usr/bin/perl
+    use Cvs::Trigger;
+    my $c = Cvs::Trigger->new();
+    my $args = $c->parse("verifymsg");
+    
+    if( $args->{message} =~ m(fixes bug #)) {
+        die "No bug number specified";
+    }
+
+C<verifymsg> provides the message, accessible by the C<message> key
+in the hash ref returned by the C<parse> method. Additionally, the 
+C<opts> key provides a list of optional parameters passed to the script
+(check C<commitinfo> for details).
+
+=item C<loginfo>
+
+Gets executed after the check-in succeeded. It doesn't matter if the 
+corresponding script fails or not, the check-in has already happend
+by the time it gets called.
+
+Note that the syntax to call the script from the C<loginfo> administration
+file is different from the previous hooks:
+
+   DEFAULT ((echo %{sVv}; cat) | /path/cvstrig)
+
+The first line piped into the script's STDIN consists of the file name,
+the previous and the new revision number, all space-separated (oh well, this
+seems to have been invented before spaces in file names came around).
+
+Following this line, a message gets passed to the script, looking something
+like this:
+
+    Update of /cvsroot/m/a
+    In directory mybox:/local_root/m/a
+    
+    Modified Files:
+           a1.txt
+    Log Message:
+    Fixing some bug, forgot which one. Yay!
+
+There's no need to parse this, though, C<Cvs::Trigger> will do that for you.
+The following hash keys are available:
+
+=over 4
+
+=item C<repo_dir>
+
+Full path to the repository directory where the check-in happens, e.g.
+C</cvsroot/foo/bardir>.
+
+=item C<host>
+
+Name of the host where the check-in has been initiated.
+
+=item C<local_dir>
+
+The directory in the user's workspace where the check-in got initiated.
+
+=item C<message>
+
+Check-in message.
+
+=item C<files>
+
+Reference to an array of filenames involved the check-in. No path
+information is provided, all files are relative to the C<repo_dir>
+directory.
+
+=back
+
+=back
+
+=head2 Use the same script for multiple hooks
+
+You can call the same trigger script in multiple hooks. Since the parameters
+passed to the script vary from hook to hook, the easiest solution is 
+to pass the hook name on to the script, so that it can switch the command
+argument parser accordingly:
+
+    # CVSROOT/commitinfo
+    DEFAULT /path/trigger commitinfo
+
+    # CVSROOT/verifymsg
+    DEFAULT /path/trigger verifymsg
+
+    #!/usr/bin/perl
+    use Cvs::Trigger;
+    my $c = Cvs::Trigger->new();
+
+    my $hook = shift;
+
+       # First argument specifies the parser
+    my $args = $c->parse( $hook );
+    
+    if( $hook eq "verifymsg" ) { 
+        if( $args->{message} =~ m(fixes bug #)) {
+            die "No bug number specified";
+        }
+    } 
+    elsif( $hook eq "commitinfo" ) { 
+        if( $args->{repo_dir} =~ m#/secret$#) {
+            die "You can't check stuff into the secret project";
+        }
+    }
+
+=head2 Loop fields through by caching
+
+If you want to make a decision based on both the file name and the 
+check-in message, none of the hooks provides all necessary information
+in one swoop. If, say, C<.c> files need a bug number in their check-in
+message and C<.txt> don't, here's a tricky way to forward the filenames
+parsed by C<commitinfo> to the C<verifymsg> hook, which has the check-in
+message available:
+
+    # CVSROOT/commitinfo
+    DEFAULT /path/trigger commitinfo
+
+    # CVSROOT/verifymsg
+    DEFAULT /path/trigger verifymsg
+
+    #!/usr/bin/perl
+    use Cvs::Trigger;
+
+        # Turn on the cache
+    my $c = Cvs::Trigger->new( cache => 1 );
+
+    my $hook = shift;
+
+       # First argument specifies the parser
+    my $args = $c->parse( $hook );
+    
+    if( $hook eq "verifymsg" ) { 
+        # We're in verifymsg now, but the cache still holds the file
+        # names obtained in the commitinfo phase
+        if( grep { /\.c$/ } @{ $args->{cache}->{files} } and
+            $args->{message} =~ m(fixes bug #) ) {
+            die "No bug number specified in .c file";
+        }
+    } 
 
 =head1 LEGALESE
 
-Copyright 2005 by Mike Schilli, all rights reserved.
+Copyright 2006 by Mike Schilli, all rights reserved.
 This program is free software, you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
