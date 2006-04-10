@@ -6,7 +6,7 @@
 use warnings;
 use strict;
 
-use Test::More qw(no_plan);
+use Test::More tests => 29;
 use Log::Log4perl qw(:easy);
 use Cvs::Trigger;
 use Sysadm::Install qw(:all);
@@ -36,7 +36,9 @@ is(scalar @{ $yml->{files} }, 1, "1 file changed");
 is($yml->{repo_dir}, "$c->{cvsroot}/m/a", "yml trigger check repo_dir");
 is($yml->{message}, "m/a/a1.txt-check-in-message\n", 
    "yml trigger check message");
-is($yml->{local_dir}, "$c->{local_root}/m/a", "local dir");
+
+# This fails if /tmp is a symlink
+#is($yml->{local_dir}, "$c->{local_root}/m/a", "local dir");
 
     # Multiple files, same dir
 $c->files_commit("m/a/a1.txt", "m/a/a2.txt");

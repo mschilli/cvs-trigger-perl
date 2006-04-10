@@ -6,7 +6,7 @@
 use warnings;
 use strict;
 
-use Test::More qw(no_plan);
+use Test::More tests => 10;
 use Log::Log4perl qw(:easy);
 use Cvs::Trigger;
 use Sysadm::Install qw(:all);
