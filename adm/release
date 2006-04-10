@@ -1,0 +1,6 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+
+use ModDevUtils;
+ModDevUtils::release() or exit 0;
