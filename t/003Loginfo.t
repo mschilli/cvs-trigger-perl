@@ -74,4 +74,27 @@ is($yml->{revs}->{"a1.txt"}->[1], "1.5", "revision check two files same dir");
 is($yml->{revs}->{"a2.txt"}->[0], "1.2", "revision check two files same dir");
 is($yml->{revs}->{"a2.txt"}->[1], "1.3", "revision check two files same dir");
 
+    # More files in different dirs
+$c->files_commit("m/a/a1.txt", "m/a/b/b.txt");
+$yml = LoadFile("$c->{out_dir}/trigger.yml.5");
+
+is($yml->{files}->[0], "a1.txt", 
+                       "yml trigger check for two files (different dirs)");
+is($yml->{repo_dir}, "$c->{cvsroot}/m/a", "yml trigger check repo_dir");
+
+is($yml->{revs}->{"a1.txt"}->[0], "1.5", "revision check two files diff dir");
+is($yml->{revs}->{"a1.txt"}->[1], "1.6", "revision check two files diff dir");
+is(scalar keys %{$yml->{revs}}, 1, "revision check two files diff dir");
+
+$yml = LoadFile("$c->{out_dir}/trigger.yml.6");
+is($yml->{files}->[0], "b.txt", 
+                       "yml trigger check for two files (different dirs)");
+is($yml->{repo_dir}, "$c->{cvsroot}/m/a/b", "yml trigger check repo_dir");
+
+is($yml->{revs}->{"b.txt"}->[0], "1.1.1.1", 
+                  "revision check two files diff dir");
+is($yml->{revs}->{"b.txt"}->[1], "1.2", 
+                  "revision check two files diff dir");
+is(scalar keys %{$yml->{revs}}, 1, "revision check two files diff dir");
+
 #<STDIN>;
