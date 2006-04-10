@@ -666,6 +666,8 @@ under the C<revs> key:
                     file2.txt => [1.1, 1.2]
                   }
 
+=back
+
 =head2 Use the same script for multiple hooks
 
 You can call the same trigger script in multiple hooks. Since the parameters
