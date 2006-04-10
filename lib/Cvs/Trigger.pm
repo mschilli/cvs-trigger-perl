@@ -23,14 +23,17 @@ sub new {
                       'loginfo'    => \&loginfo,
                       'verifymsg'  => \&verifymsg,
                     },
+        cache_default_expires_in  => 3600,
+        cache_auto_purge_interval => 1800,
+        cache_namespace           => "cvs",
         %options,
     };
 
     if($self->{cache}) {
         $self->{file_cache} = Cache::FileCache->new({
-                namespace           => "cvs",
-                default_expires_in  => 3600,
-                auto_purge_interval => 1800,
+                namespace           => $self->{cache_namespace},
+                default_expires_in  => $self->{cache_default_expires_in},
+                auto_purge_interval => $self->{cache_auto_purge_interval},
         });
     }
 
@@ -113,7 +116,17 @@ sub verifymsg {
 
     if($self->{cache}) {
         $res->{cache} = $self->_cache_get();
-        $self->{file_cache}->remove(getppid());
+
+        my $ttl = $self->_cache_ttl_dec();
+
+        if($ttl < 1) {
+            DEBUG "ttl=$ttl: Removing the cache for ", getppid();
+            $self->{file_cache}->remove(getppid());
+        } else {
+            # Don't remove it yet, this could be a multi-dir check-in and
+            # another verifymsg might be following and still rely on the cache.
+            DEBUG "ttl=$ttl: Keeping the cache";
+        }
     }
 
     DEBUG "verifymsg parameters: ", Dumper($res);
@@ -258,8 +271,24 @@ sub _cache_set {
 
         push @{ $cdata->{$repo_dir} }, $file;
     }
+    $cdata->{_ttl} += 1;
     DEBUG "Setting $ppid cache to ", Dumper($cdata);
     $self->{file_cache}->set($ppid, freeze $cdata);
+}
+
+###########################################
+sub _cache_ttl_dec {
+###########################################
+    my($self) = @_;
+
+    my $ppid = getppid();
+
+    my $cdata = $self->_cache_get();
+    $cdata->{_ttl}--;
+
+    $self->{file_cache}->set($ppid, freeze $cdata);
+
+    return $cdata->{_ttl};
 }
 
 ###########################################
@@ -276,7 +305,7 @@ sub _cache_get {
         $cdata = thaw $c;
     } else {
         DEBUG "Cache miss on ppid=$ppid";
-        $cdata = {};
+        $cdata = { _ttl => 0 };
     }
 
     return $cdata;
@@ -338,13 +367,14 @@ use Cvs::Trigger qw(:all);
 use YAML qw(DumpFile);
 use Log::Log4perl qw(:easy);
 Log::Log4perl->easy_init({ level => $DEBUG, file => ">>_logfile_"});
-DEBUG "trigger starting @ARGV";
+DEBUG "_type_ trigger starting @ARGV";
 my $c = Cvs::Trigger->new(_cache_);
 my $ret = $c->parse("_type_", _parse_opt_);
 my $count = 1;
 while(-f "_tmpfile_.$count") {
     $count++;
 }
+DEBUG "Creating _tmpfile_.$count";
 DumpFile "_tmpfile_.$count", $ret;
 EOT
 
@@ -671,6 +701,8 @@ argument parser accordingly:
 
 =head2 Remember fields by caching
 
+THIS FEATURE IS EXPERIMENTAL. USE AT YOUR OWN RISK.
+
 If you want to make a decision based on both the file name and the 
 check-in message, none of the hooks provides all necessary information
 in one swoop. If, say, C<.c> files need a bug number in their check-in
@@ -704,12 +736,49 @@ message available:
         }
     } 
 
+Caching has a couple of gotchas, though. First, items can only stay
+in the cache for a limited time, to avoid a cache overflow with many
+simultaneous checkins going on.
+
+However, the time span between C<commitinfo> and C<verifymsg> can hardly 
+be estimated accurately. What if someone types "cvs commit" and then
+goes to lunch? The editor window will stay open, and if the message
+gets saved a couple of hours later, the cache still needs to hold a copy
+of the C<commitinfo> data.
+
+Deleting the cache data once C<verifymsg> is done with it doesn't work either.
+If you type "cvs commit" in a directory with multiple subdirectories,
+both the C<commitinfo> and C<verifymsg> will get called for each subdirectory
+containing modified files. C<Cvs::Trigger> therefore maintains a TTL
+(time to live) counter to keep track of how many instances of C<verifymsg>
+are still going to read it. Bottom line: The cache entry will be deleted once
+the last C<verifymsg> instance is done with it.
+
+Nevertheless, determining the cache timeout is a delicate issue. The
+default values are set as follows:
+
+        # Turn on the cache
+    my $c = Cvs::Trigger->new(
+       cache                     => 1,
+       cache_default_expires_in  => 3600,
+       cache_auto_purge_interval => 1800,
+       cache_namespace           => "cvs",
+    );
+
+Therefore, the cache will expire entries after an hour and it will run the
+check/prune procedure every half hour. To set different values, simply call
+C<new> with different parameters. The cache namespace can also be configured,
+see the L<Cache::Cache> manual page for details.
+
+The cache makes use of the fact that the C<commitinfo> and C<verifymsg> scripts
+are run by processes sharing the same parent pid (ppid). The cache indexes
+its data using this pid value. If the operating system reuses the same 
+pid within the expiration timeframe, a clash will occur.
+
 =head1 TODO List
 
-    * parse ''message' => 'a/b txt3,1.4,1.5'
     * methods vs. hash access
     * no STDIN on loginfo => hangs
-    * configure cache timeout/namespace
 
 =head1 LEGALESE
 
