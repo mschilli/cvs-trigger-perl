@@ -11,7 +11,7 @@ use Cache::FileCache;
 use Storable qw(freeze thaw);
 use POSIX;
 
-our $VERSION = "0.01";
+our $VERSION = "0.02";
 
 ###########################################
 sub new {
@@ -777,8 +777,14 @@ pid within the expiration timeframe, a clash will occur.
 
 =head1 TODO List
 
+    * Try filenames with commas, spaces, and newlines
+    * tests for optional arguments
     * methods vs. hash access
     * no STDIN on loginfo => hangs
+
+=head1 SEE ALSO
+
+http://ximbiot.com/cvs/wiki/index.php?title=CVS--Concurrent_Versions_System_v1.12.12.1:_Reference_manual_for_Administrative_files#SEC184
 
 =head1 LEGALESE
 
