@@ -65,4 +65,33 @@ is($yml->{cache}->{"$c->{cvsroot}/m/a"}->[0], "a1.txt",
 is($yml->{cache}->{"$c->{cvsroot}/m/a"}->[1], "a2.txt", 
                    "cached filename");
 
-#<STDIN>;
+    # Multiple files, diff dirs
+$c->files_commit("m/a/a1.txt", "m/a/b/b.txt");
+
+$yml = LoadFile("$c->{out_dir}/trigger.yml.5");
+is($yml->{files}->[0], "a1.txt", 
+                       "yml trigger check for mult files (diff dir)");
+is(scalar @{$yml->{files}}, 1, "yml trigger check for mult files (diff dir)");
+is($yml->{repo_dir}, "$c->{cvsroot}/m/a", "yml trigger check repo_dir");
+
+$yml = LoadFile("$c->{out_dir}/trigger.yml.6");
+is($yml->{files}->[0], "b.txt", 
+                       "yml trigger check for mult files (diff dir)");
+is(scalar @{$yml->{files}}, 1, "yml trigger check for mult files (diff dir)");
+is($yml->{repo_dir}, "$c->{cvsroot}/m/a/b", "yml trigger check repo_dir");
+
+
+   # commitinfo logfile
+$yml = LoadFile("$c->{out_dir}/trigger.yml.7");
+is($yml->{message}, "m/a/a1.txt m/a/b/b.txt-check-in-message\n", 
+                    "verifymsg message");
+
+is($yml->{cache}->{"$c->{cvsroot}/m/a"}->[0], "a1.txt", 
+                   "cached filename");
+   # commitinfo logfile
+$yml = LoadFile("$c->{out_dir}/trigger.yml.8");
+is($yml->{message}, "m/a/a1.txt m/a/b/b.txt-check-in-message\n", 
+                    "verifymsg message");
+
+is($yml->{cache}->{"$c->{cvsroot}/m/a/b"}->[0], "b.txt", 
+                   "cached filename");
