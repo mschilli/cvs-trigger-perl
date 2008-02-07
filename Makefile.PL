@@ -7,7 +7,7 @@ WriteMakefile(
     'NAME'         => 'Cvs::Trigger',
     'VERSION_FROM' => 'lib/Cvs/Trigger.pm', # finds $VERSION
     'PREREQ_PM'    => {
-        Sysadm::Install  => 0,
+        Sysadm::Install  => 0.25, # needs the cdback fix
         YAML             => 0,
         Cache::FileCache => 0,
         Storable         => 0,
