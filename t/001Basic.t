@@ -17,6 +17,7 @@ BEGIN { use_ok('Cvs::Trigger') };
 #Log::Log4perl->easy_init($DEBUG);
 
 my $c = Cvs::Temp->new();
+cd $c->{local_root};
 $c->module_import();
 
 my $code = $c->test_trigger_code("commitinfo");
@@ -50,5 +51,7 @@ is($yml->{repo_dir}, "$c->{cvsroot}/m/a", "yml trigger check repo_dir");
 $yml = LoadFile("$c->{out_dir}/trigger.yml.4");
 is($yml->{files}->[0], "b.txt", "yml trigger check for two files (same dir)");
 is($yml->{repo_dir}, "$c->{cvsroot}/m/a/b", "yml trigger check repo_dir");
+
+cdback;
 
 #<STDIN>;
