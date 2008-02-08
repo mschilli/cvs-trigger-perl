@@ -1,7 +1,8 @@
 ######################################################################
 Revision history for Perl extension Cvs::Trigger
 
-0.02  2006/04/09
+0.02  2008/02/07
+    (ms) test suite fixes to cope with File::Path changes
 
 0.01  2006/04/06
-      * Where it all began.
+    (ms) Where it all began.
