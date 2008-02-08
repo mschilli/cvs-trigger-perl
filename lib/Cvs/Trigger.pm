@@ -434,6 +434,7 @@ sub files_commit {
     my($self, @files) = @_;
 
     my $dir = $self->{local_root};
+    cd $dir;
 
     for my $file (@files) {
         blurt rand(1E10), $file;
