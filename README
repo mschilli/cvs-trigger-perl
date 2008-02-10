@@ -185,124 +185,128 @@ DESCRIPTION
                           }
 
   Use the same script for multiple hooks
-        You can call the same trigger script in multiple hooks. Since the
-        parameters passed to the script vary from hook to hook, the easiest
-        solution is to pass the hook name on to the script, so that it can
-        switch the command argument parser accordingly:
+    You can call the same trigger script in multiple hooks. Since the
+    parameters passed to the script vary from hook to hook, the easiest
+    solution is to pass the hook name on to the script, so that it can
+    switch the command argument parser accordingly:
 
-            # CVSROOT/commitinfo
-            DEFAULT /path/trigger commitinfo
+        # CVSROOT/commitinfo
+        DEFAULT /path/trigger commitinfo
 
-            # CVSROOT/verifymsg
-            DEFAULT /path/trigger verifymsg
+        # CVSROOT/verifymsg
+        DEFAULT /path/trigger verifymsg
 
-            #!/usr/bin/perl
-            use Cvs::Trigger;
-            my $c = Cvs::Trigger->new();
+        #!/usr/bin/perl
+        use Cvs::Trigger;
+        my $c = Cvs::Trigger->new();
 
-            my $hook = shift;
+        my $hook = shift;
 
-               # First argument specifies the parser
-            my $args = $c->parse( $hook );
+           # First argument specifies the parser
+        my $args = $c->parse( $hook );
     
-            if( $hook eq "verifymsg" ) { 
-                if( $args->{message} =~ m(fixes bug #)) {
-                    die "No bug number specified";
-                }
-            } 
-            elsif( $hook eq "commitinfo" ) { 
-                if( $args->{repo_dir} =~ m#/secret$#) {
-                    die "You can't check stuff into the secret project";
-                }
+        if( $hook eq "verifymsg" ) { 
+            if( $args->{message} =~ m(fixes bug #)) {
+                die "No bug number specified";
             }
+        } 
+        elsif( $hook eq "commitinfo" ) { 
+            if( $args->{repo_dir} =~ m#/secret$#) {
+                die "You can't check stuff into the secret project";
+            }
+        }
 
   Remember fields by caching
-        THIS FEATURE IS EXPERIMENTAL. USE AT YOUR OWN RISK.
+    THIS FEATURE IS EXPERIMENTAL. USE AT YOUR OWN RISK.
 
-        If you want to make a decision based on both the file name and the
-        check-in message, none of the hooks provides all necessary
-        information in one swoop. If, say, ".c" files need a bug number in
-        their check-in message and ".txt" don't, here's a tricky way to
-        forward the filenames parsed by "commitinfo" to the "verifymsg"
-        hook, which has the check-in message available:
+    If you want to make a decision based on both the file name and the
+    check-in message, none of the hooks provides all necessary information
+    in one swoop. If, say, ".c" files need a bug number in their check-in
+    message and ".txt" don't, here's a tricky way to forward the filenames
+    parsed by "commitinfo" to the "verifymsg" hook, which has the check-in
+    message available:
 
-            # CVSROOT/commitinfo
-            DEFAULT /path/trigger commitinfo
+        # CVSROOT/commitinfo
+        DEFAULT /path/trigger commitinfo
 
-            # CVSROOT/verifymsg
-            DEFAULT /path/trigger verifymsg
+        # CVSROOT/verifymsg
+        DEFAULT /path/trigger verifymsg
 
-            #!/usr/bin/perl
-            use Cvs::Trigger;
+        #!/usr/bin/perl
+        use Cvs::Trigger;
 
-                # Turn on the cache
-            my $c = Cvs::Trigger->new( cache => 1 );
+            # Turn on the cache
+        my $c = Cvs::Trigger->new( cache => 1 );
 
-            my $hook = shift;
+        my $hook = shift;
 
-               # First argument specifies the parser
-            my $args = $c->parse( $hook );
+           # First argument specifies the parser
+        my $args = $c->parse( $hook );
     
-            if( $hook eq "verifymsg" ) { 
-                # We're in verifymsg now, but the cache still holds the file
-                # names obtained in the commitinfo phase
-                if( grep { /\.c$/ } @{ $args->{cache}->{files} } and
-                    $args->{message} =~ m(fixes bug #) ) {
-                    die "No bug number specified in .c file";
-                }
-            } 
+        if( $hook eq "verifymsg" ) { 
+            # We're in verifymsg now, but the cache still holds the file
+            # names obtained in the commitinfo phase
+            if( grep { /\.c$/ } @{ $args->{cache}->{files} } and
+                $args->{message} =~ m(fixes bug #) ) {
+                die "No bug number specified in .c file";
+            }
+        } 
 
-        Caching has a couple of gotchas, though. First, items can only stay
-        in the cache for a limited time, to avoid a cache overflow with many
-        simultaneous checkins going on.
+    Caching has a couple of gotchas, though. First, items can only stay in
+    the cache for a limited time, to avoid a cache overflow with many
+    simultaneous checkins going on.
 
-        However, the time span between "commitinfo" and "verifymsg" can
-        hardly be estimated accurately. What if someone types "cvs commit"
-        and then goes to lunch? The editor window will stay open, and if the
-        message gets saved a couple of hours later, the cache still needs to
-        hold a copy of the "commitinfo" data.
+    However, the time span between "commitinfo" and "verifymsg" can hardly
+    be estimated accurately. What if someone types "cvs commit" and then
+    goes to lunch? The editor window will stay open, and if the message gets
+    saved a couple of hours later, the cache still needs to hold a copy of
+    the "commitinfo" data.
 
-        Deleting the cache data once "verifymsg" is done with it doesn't
-        work either. If you type "cvs commit" in a directory with multiple
-        subdirectories, both the "commitinfo" and "verifymsg" will get
-        called for each subdirectory containing modified files.
-        "Cvs::Trigger" therefore maintains a TTL (time to live) counter to
-        keep track of how many instances of "verifymsg" are still going to
-        read it. Bottom line: The cache entry will be deleted once the last
-        "verifymsg" instance is done with it.
+    Deleting the cache data once "verifymsg" is done with it doesn't work
+    either. If you type "cvs commit" in a directory with multiple
+    subdirectories, both the "commitinfo" and "verifymsg" will get called
+    for each subdirectory containing modified files. "Cvs::Trigger"
+    therefore maintains a TTL (time to live) counter to keep track of how
+    many instances of "verifymsg" are still going to read it. Bottom line:
+    The cache entry will be deleted once the last "verifymsg" instance is
+    done with it.
 
-        Nevertheless, determining the cache timeout is a delicate issue. The
-        default values are set as follows:
+    Nevertheless, determining the cache timeout is a delicate issue. The
+    default values are set as follows:
 
-                # Turn on the cache
-            my $c = Cvs::Trigger->new(
-               cache                     => 1,
-               cache_default_expires_in  => 3600,
-               cache_auto_purge_interval => 1800,
-               cache_namespace           => "cvs",
-            );
+            # Turn on the cache
+        my $c = Cvs::Trigger->new(
+           cache                     => 1,
+           cache_default_expires_in  => 3600,
+           cache_auto_purge_interval => 1800,
+           cache_namespace           => "cvs",
+        );
 
-        Therefore, the cache will expire entries after an hour and it will
-        run the check/prune procedure every half hour. To set different
-        values, simply call "new" with different parameters. The cache
-        namespace can also be configured, see the Cache::Cache manual page
-        for details.
+    Therefore, the cache will expire entries after an hour and it will run
+    the check/prune procedure every half hour. To set different values,
+    simply call "new" with different parameters. The cache namespace can
+    also be configured, see the Cache::Cache manual page for details.
 
-        The cache makes use of the fact that the "commitinfo" and
-        "verifymsg" scripts are run by processes sharing the same parent pid
-        (ppid). The cache indexes its data using this pid value. If the
-        operating system reuses the same pid within the expiration
-        timeframe, a clash will occur.
+    The cache makes use of the fact that the "commitinfo" and "verifymsg"
+    scripts are run by processes sharing the same parent pid (ppid). The
+    cache indexes its data using this pid value. If the operating system
+    reuses the same pid within the expiration timeframe, a clash will occur.
 
 TODO List
-            * methods vs. hash access
-            * no STDIN on loginfo => hangs
+        * Try filenames with commas, spaces, and newlines
+        * tests for optional arguments
+        * methods vs. hash access
+        * no STDIN on loginfo => hangs
+
+SEE ALSO
+    http://ximbiot.com/cvs/wiki/index.php?title=CVS--Concurrent_Versions_Sys
+    tem_v1.12.12.1:_Reference_manual_for_Administrative_files#SEC184
 
 LEGALESE
-        Copyright 2006 by Mike Schilli, all rights reserved. This program is
-        free software, you can redistribute it and/or modify it under the
-        same terms as Perl itself.
+    Copyright 2006 by Mike Schilli, all rights reserved. This program is
+    free software, you can redistribute it and/or modify it under the same
+    terms as Perl itself.
 
 AUTHOR
-        2006, Mike Schilli <m@perlmeister.com>
+    2006, Mike Schilli <m@perlmeister.com>
 
