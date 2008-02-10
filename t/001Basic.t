@@ -14,7 +14,7 @@ use YAML qw(LoadFile);
 
 BEGIN { use_ok('Cvs::Trigger') };
 
-#Log::Log4perl->easy_init($DEBUG);
+#Log::Log4perl->easy_init({ level => $DEBUG, layout => "%F-%L: %m%n"});
 
 my $c = Cvs::Temp->new();
 cd $c->{local_root};
