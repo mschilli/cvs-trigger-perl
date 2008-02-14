@@ -348,10 +348,16 @@ sub new {
 
     bless $self, $class;
 
+    return $self;
+}
+
+###########################################
+sub init {
+###########################################
+    my($self) = @_;
+
     $self->cvs_cmd("init");
     DEBUG "New cvs created in $self->{cvsroot}";
-
-    return $self;
 }
 
 ###########################################

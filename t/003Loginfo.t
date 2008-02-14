@@ -17,6 +17,7 @@ BEGIN { use_ok('Cvs::Trigger') };
 #Log::Log4perl->easy_init($DEBUG);
 
 my $c = Cvs::Temp->new();
+$c->init();
 $c->module_import();
 
 my $code = $c->test_trigger_code("loginfo", 0);

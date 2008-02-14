@@ -17,6 +17,7 @@ BEGIN { use_ok('Cvs::Trigger') };
 #Log::Log4perl->easy_init({ level => $DEBUG, layout => "%F-%L: %m%n"});
 
 my $c = Cvs::Temp->new();
+$c->init();
 cd $c->{local_root};
 $c->module_import();
 
