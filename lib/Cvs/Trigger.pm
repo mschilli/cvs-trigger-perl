@@ -99,7 +99,7 @@ sub verifymsg {
     DEBUG "Running verifymsg ($$ ", getppid(), ")";
 
     if(@ARGV < 1) {
-        LOGDIE "Argument error: commitinfo expects at least 1 parameter";
+        LOGDIE "Argument error: verifymsg expects at least 1 parameter";
     }
 
     my $tmp_file = $ARGV[-1];
