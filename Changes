@@ -1,8 +1,9 @@
 ######################################################################
 Revision history for Perl extension Cvs::Trigger
 
-0.03  (not yet released)
+0.03  2008/03/25
     (ms) removed init() from Cvs::Temp new()
+    (ms) fixed problem with messages containing a single quote
 
 0.02  2008/02/10
     (ms) test suite fixes to cope with File::Path changes

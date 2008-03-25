@@ -451,6 +451,20 @@ sub files_commit {
 }
 
 ###########################################
+sub single_file_commit {
+###########################################
+    my($self, $content, $file, $message) = @_;
+
+    my $dir = $self->{local_root};
+    cd $dir;
+
+    blurt $content, $file;
+    $self->cvs_cmd("commit", "-m", $message, $file);
+
+    cdback;
+}
+
+###########################################
 sub cvs_cmd {
 ###########################################
     my($self, @cmd) = @_;
