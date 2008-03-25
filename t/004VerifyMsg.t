@@ -25,9 +25,11 @@ my $vscript = "$c->{bin_dir}/vtrigger";
 blurt $vcode, $vscript;
 chmod 0755, $vscript;
 
-my $verifymsg = "$c->{cvsroot}/CVSROOT/verifymsg";
+my $verifymsg = "$c->{local_root}/CVSROOT/verifymsg";
 chmod 0644, $verifymsg or die "cannot chmod $verifymsg";
 blurt "DEFAULT $vscript", $verifymsg;
+
+$c->admin_rebuild();
 
     # Check-in message containing a quote
 $c->single_file_commit("file_content\n", "m/a/a1.txt", 

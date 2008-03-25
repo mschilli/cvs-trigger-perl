@@ -26,9 +26,10 @@ my $script = "$c->{bin_dir}/trigger";
 blurt $code, $script;
 chmod 0755, $script;
 
-my $commitinfo = "$c->{cvsroot}/CVSROOT/commitinfo";
+my $commitinfo = "$c->{local_root}/CVSROOT/commitinfo";
 chmod 0644, $commitinfo or die "cannot chmod $commitinfo";
 blurt "DEFAULT $script", $commitinfo;
+$c->admin_rebuild();
 
     # Single file
 $c->files_commit("m/a/a1.txt");

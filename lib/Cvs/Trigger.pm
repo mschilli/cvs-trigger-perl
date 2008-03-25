@@ -150,11 +150,11 @@ sub loginfo {
     $opts ||= {};
     my $rev_fmt = ($opts->{rev_fmt} || undef);
 
-    DEBUG "Running loginfo ($$ ", getppid(), ")";
-
     my @opts = @ARGV;
 
     my $data = join '', <STDIN>;
+
+    DEBUG "Running loginfo ($$ ", getppid(), "): argv=[@ARGV] data=[$data]";
 
     my $res = {
         opts    => \@opts,
@@ -346,6 +346,13 @@ sub new {
     $self->{perl_bin} = bin_find("perl") unless 
                         defined $self->{perl_bin};
 
+    my($stdout, $stderr, $rc) = tap $self->{cvs_bin}, "-v";
+    if($rc == 0 and $stdout =~ /(\d+\.\d+)/) {
+        $self->{cvs_version} = $1;
+    } else {
+        LOGDIE "Cannot determine CVS version ($stderr)";
+    }
+
     bless $self, $class;
 
     return $self;
@@ -358,6 +365,10 @@ sub init {
 
     $self->cvs_cmd("init");
     DEBUG "New cvs created in $self->{cvsroot}";
+
+    cd $self->{local_root};
+    $self->cvs_cmd("co", "CVSROOT");
+    cdback;
 }
 
 ###########################################
@@ -372,7 +383,8 @@ use lib '_cwd_/blib/arch';
 use Cvs::Trigger qw(:all);
 use YAML qw(DumpFile);
 use Log::Log4perl qw(:easy);
-Log::Log4perl->easy_init({ level => $DEBUG, file => ">>_logfile_"});
+Log::Log4perl->easy_init({ level => $DEBUG, file => ">>_logfile_",
+        layout => "%F{1}-%L: %m%n" });
 DEBUG "_type_ trigger starting @ARGV";
 my $c = Cvs::Trigger->new(_cache_);
 my $ret = $c->parse("_type_", _parse_opt_);
@@ -465,6 +477,19 @@ sub single_file_commit {
 }
 
 ###########################################
+sub admin_rebuild {
+###########################################
+    my($self) = @_;
+
+    my $dir = "$self->{local_root}/CVSROOT";
+    cd $dir;
+
+    $self->cvs_cmd("commit", "-m", "admin rebuild", ".");
+
+    cdback;
+}
+
+###########################################
 sub cvs_cmd {
 ###########################################
     my($self, @cmd) = @_;
@@ -478,7 +503,26 @@ sub cvs_cmd {
         LOGDIE "@cmd failed: $stderr";
     }
 
+    if($stderr) {
+        ERROR "cvs cmd warning $stderr";
+    }
+
     DEBUG "@cmd succeeded: $stdout";
+}
+
+
+###########################################
+sub loginfo_line {
+###########################################
+    my($self, $script) = @_;
+
+    # The CVS folks had the glorious idea to change the loginfo format
+    # in 1.12 in a non-backward-compatible way. What were they thinking?
+    if($self->{cvs_version} < 1.12) {
+        return "DEFAULT ((echo %{sVv}; cat) | $script)";
+    }
+
+    return "DEFAULT ((echo %1{sVv}; cat) | $script)";
 }
 
 1;
