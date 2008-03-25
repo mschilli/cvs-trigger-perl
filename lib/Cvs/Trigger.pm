@@ -525,6 +525,19 @@ sub loginfo_line {
     return "DEFAULT ((echo %1{sVv}; cat) | $script)";
 }
 
+###########################################
+sub latest_yml {
+###########################################
+    my($self, $index) = @_;
+
+    my $dir = $self->{out_dir};
+    my @ymls = sort { -M $b <=> -M $a } <$dir/trigger.yml.*>;
+
+    $index = -1 unless defined $index;
+
+    return $ymls[$index];
+}
+
 1;
 
 __END__
