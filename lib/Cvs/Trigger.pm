@@ -11,7 +11,7 @@ use Cache::FileCache;
 use Storable qw(freeze thaw);
 use POSIX;
 
-our $VERSION = "0.03";
+our $VERSION = "0.04";
 
 ###########################################
 sub new {
@@ -345,6 +345,10 @@ sub new {
     $self->{cvs_bin}  = bin_find("cvs") unless defined $self->{cvs_bin};
     $self->{perl_bin} = bin_find("perl") unless 
                         defined $self->{perl_bin};
+
+    if(! defined $self->{cvs_bin}) {
+        LOGDIE "Cannot find 'cvs' binary in your PATH.";
+    }
 
     my($stdout, $stderr, $rc) = tap $self->{cvs_bin}, "-v";
     if($rc == 0 and $stdout =~ /(\d+\.\d+)/) {

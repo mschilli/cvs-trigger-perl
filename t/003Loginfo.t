@@ -6,13 +6,20 @@
 use warnings;
 use strict;
 
-use Test::More tests => 29;
+use Test::More;
 use Log::Log4perl qw(:easy);
 use Cvs::Trigger;
 use Sysadm::Install qw(:all);
 use YAML qw(LoadFile);
 
-BEGIN { use_ok('Cvs::Trigger') };
+my $nof_tests = 28;
+plan tests => $nof_tests;
+
+SKIP: {
+
+if(!defined bin_find("cvs")) {
+    skip "cvs not installed", $nof_tests;
+}
 
 #Log::Log4perl->easy_init($DEBUG);
 
@@ -111,4 +118,4 @@ is($yml->{revs}->{"b.txt"}->[1], "1.2",
                   "revision check two files diff dir");
 is(scalar keys %{$yml->{revs}}, 1, "revision check two files diff dir");
 
-#<STDIN>;
+}

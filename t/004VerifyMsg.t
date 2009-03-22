@@ -6,13 +6,20 @@
 use warnings;
 use strict;
 
-use Test::More tests => 2;
+use Test::More;
 use Log::Log4perl qw(:easy);
 use Cvs::Trigger;
 use Sysadm::Install qw(:all);
 use YAML qw(LoadFile);
 
-BEGIN { use_ok('Cvs::Trigger') };
+my $nof_tests = 1;
+plan tests => $nof_tests;
+
+SKIP: {
+
+if(!defined bin_find("cvs")) {
+    skip "cvs not installed", $nof_tests;
+}
 
 #Log::Log4perl->easy_init($DEBUG);
 
@@ -38,3 +45,4 @@ $c->single_file_commit("file_content\n", "m/a/a1.txt",
 my $yml = LoadFile("$c->{out_dir}/trigger.yml.1");
 is($yml->{message}, "message with a ' quote\n", 
    "message with a single quote");
+}

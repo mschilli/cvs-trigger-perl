@@ -6,13 +6,20 @@
 use warnings;
 use strict;
 
-use Test::More tests => 21;
+use Test::More;
 use Log::Log4perl qw(:easy);
 use Cvs::Trigger;
 use Sysadm::Install qw(:all);
 use YAML qw(LoadFile);
 
-BEGIN { use_ok('Cvs::Trigger') };
+my $nof_tests = 20;
+plan tests => $nof_tests;
+
+SKIP: {
+
+if(!defined bin_find("cvs")) {
+    skip "cvs not installed", $nof_tests;
+}
 
 #Log::Log4perl->easy_init($DEBUG);
 
@@ -98,3 +105,4 @@ is($yml->{message}, "m/a/a1.txt m/a/b/b.txt-check-in-message\n",
 
 is($yml->{cache}->{"$c->{cvsroot}/m/a/b"}->[0], "b.txt", 
                    "cached filename");
+}
