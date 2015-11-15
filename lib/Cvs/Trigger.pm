@@ -11,7 +11,7 @@ use Cache::FileCache;
 use Storable qw(freeze thaw);
 use POSIX;
 
-our $VERSION = "0.04";
+our $VERSION = "0.05";
 
 ###########################################
 sub new {

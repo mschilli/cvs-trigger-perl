@@ -1,6 +1,9 @@
 ######################################################################
 Revision history for Perl extension Cvs::Trigger
 
+0.05  2015/11/15
+    (ms) Moved to github: https://github.com/mschilli/cvs-trigger-perl
+
 0.04  2009/03/22
     (ms) Skip tests on platforms which don't have cvs installed.
 
